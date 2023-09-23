@@ -50,7 +50,6 @@ int execProgram(char *executable, char *argv[], int background) {
 
 int processInput(char input[]) {
     char *command;
-    char inputClone[MAX_CMD_LEN] = {"0"};
     int numFinishedProcesses = 0;
 
     //First up, check to see if background processes have completed and output their exit codes
@@ -65,11 +64,8 @@ int processInput(char input[]) {
     }
     numBackgroundProcesses -= numFinishedProcesses;
 
-    //Avoid directly modifying the input
-    //FIXME: Necessary?
-    strcpy(inputClone, input);
     //Extract the executable from the input string
-    command = strtok(inputClone, " ");
+    command = strtok(input, " ");
 
     //---------Built-in commands---------
     if (strcmp(command, "exit\n") == 0) {
