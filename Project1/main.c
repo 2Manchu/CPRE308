@@ -4,12 +4,23 @@
 #include <stdlib.h>
 
 #define MAX_CMD_LEN 300
+#define MAX_ARG_LEN 100
 #define MAX_BG_PROCESSES 50
-#define MAX_BINARY_NAME 100
 
 pid_t backgroundProcesses[MAX_BG_PROCESSES];
-char backgroundProcNames[MAX_BG_PROCESSES][MAX_BINARY_NAME];
+char backgroundProcNames[MAX_BG_PROCESSES][MAX_ARG_LEN];
 int numBackgroundProcesses = 0;
+
+char *currentArg;
+char *execArgs[MAX_CMD_LEN] = {NULL};
+
+void freeArgMemory(int numExecArgs) {
+    //Only need to do a less than here since the
+    for (int i = 0; i <= numExecArgs; i++) {
+        free(execArgs[i]);
+        execArgs[i] = NULL;
+    }
+}
 
 int execProgram(char *executable, char *argv[], int background) {
     ///Fork the child process
@@ -49,8 +60,10 @@ int execProgram(char *executable, char *argv[], int background) {
 }
 
 int processInput(char input[]) {
-    char *command;
     int numFinishedProcesses = 0;
+
+    int background = 0;
+    int currentChar;
 
     //First up, check to see if background processes have completed and output their exit codes
     for (int i = 0; i < numBackgroundProcesses; i++) {
@@ -64,68 +77,86 @@ int processInput(char input[]) {
     }
     numBackgroundProcesses -= numFinishedProcesses;
 
-    //Extract the executable from the input string
-    command = strtok(input, " ");
+    //Parse the input for executable/command name and arguments
+    int quoteSeen = 0;
+    int execArgsIndex = 0;
+    int currentArgIndex = 0;
+    currentArg = (char*) malloc(MAX_ARG_LEN * sizeof(char));
+    for(currentChar = 0; currentChar < strlen(input); currentChar++) {
+        //Check for space and inside/outside of quotes
+        //This portion is space-delimited but only if outside of quotes
+        if ((input[currentChar] == 32 || input[currentChar] == 10) && quoteSeen == 0) {
+            //Append a null character to the end of the argument
+            currentArg[currentArgIndex] = '\0';
+            //Copy the current built argument to the arguments array
+            execArgs[execArgsIndex] = currentArg;
+
+            //Reset the character index for the current argument
+            currentArgIndex = 0;
+
+            //We should count this as the start of the next argument if we are not in quotes
+
+            //New memory address so the old one doesn't get overwritten, only if not newline
+            if (input[currentChar] != 10) {
+                currentArg = (char *) malloc(MAX_ARG_LEN * sizeof(char));
+                execArgsIndex++;
+            }
+            continue;
+        //Ignore spaces if we are inside a quotation
+        } else if (input[currentChar] == 32 && quoteSeen == 1) {
+            currentArg[currentArgIndex] = input[currentChar];
+            currentArgIndex++;
+            continue;
+        }
+        //If we see a " mark
+        if (input[currentChar] == 34 && !quoteSeen) {
+            quoteSeen = 1;
+            continue;
+        } else if (input[currentChar] == 34 && quoteSeen) {
+            quoteSeen = 0;
+            continue;
+        }
+
+        currentArg[currentArgIndex] = input[currentChar];
+        currentArgIndex++;
+    }
 
     //---------Built-in commands---------
-    if (strcmp(command, "exit\n") == 0) {
+    if (strcmp(execArgs[0], "exit") == 0) {
+        freeArgMemory(execArgsIndex);
         return 127;
-    } else if (strcmp(command, "pid\n") == 0) {
+    } else if (strcmp(execArgs[0], "pid") == 0) {
         printf("PID: %d\n", getpid());
+        freeArgMemory(execArgsIndex);
         return 0;
-    } else if (strcmp(command, "ppid\n") == 0) {
+    } else if (strcmp(execArgs[0], "ppid") == 0) {
         printf("PPID: %d\n", getppid());
+        freeArgMemory(execArgsIndex);
         return 0;
-    } else if (strcmp(command, "pwd\n") == 0) {
+    } else if (strcmp(execArgs[0], "pwd") == 0) {
         char *workingDir = NULL;
         workingDir = getwd(workingDir);
         printf("%s\n", workingDir);
+        freeArgMemory(execArgsIndex);
         return 0;
-    } else if (strcmp(command, "cd") == 0) {
-        char *directory = NULL;
-        //The rest of the string before newline should be a directory, so grab it
-        directory = strtok(NULL, "\n");
-        if (chdir(directory)) {
+    } else if (strcmp(execArgs[0], "cd") == 0) {
+        //Second argument should be a directory
+        if (chdir(execArgs[1])) {
             printf("Specified file does not exist or is not a directory.\n");
+            freeArgMemory(execArgsIndex);
             return 1;
         }
+        freeArgMemory(execArgsIndex);
         return 0;
     }
 
-    //---------Extract program arguments and call exec routine---------
-    char *argv[MAX_CMD_LEN] = {NULL};
-    char *next_arg;
-    int i = 0, background = 0;
-
-    //First argument is always the executable name
-    argv[0] = command;
-
-    //Get program arguments
-    while (1) {
-        i++;
-        //Grab next switch/option/path, etc. out of the input executable
-        next_arg = strtok(NULL, " ");
-        //Check to see if we've hit the end of the argument string (or there were no switches set to begin with)
-        if (next_arg == NULL) {
-            break;
-        }
-
-        //FIXME: DEBUG
-        //printf("Adding to argv[%d]: %s\n", i, next_arg);
-        argv[i] = next_arg;
-    }
-    int lastArgLen = strlen(argv[i-1]);
-    argv[i-1][lastArgLen - 1] = '\0';
-
-    //Check to see if user wants to run process in background, set if & exists as the last arg
-    if (strcmp(argv[i-1], "&") == 0) {
+    if (strcmp(execArgs[execArgsIndex], "&") == 0) {
+        execArgs[execArgsIndex] = NULL;
         background = 1;
-        //Delete the & from the args vector
-        argv[i-1] = NULL;
     }
-
-    //Execute the program specified by argv[0] with args argv
-    execProgram(argv[0], argv, background);
+    //We didn't have a built-in command, so execute the program specified by execArgs[0] with args execArgs
+    execProgram(execArgs[0], execArgs, background);
+    freeArgMemory(execArgsIndex);
 }
 
 int main(int argc, char *argv[]) {
