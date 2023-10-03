@@ -42,6 +42,7 @@ int execProgram(char *executable, char *argv[], int background) {
             waitpid(childPID, &status, 0);
             printf("[%d] %s Exit %d\n", childPID, executable, status);
             return 0;
+        //Else add the background process to the currently executing jobs list
         } else {
             backgroundProcesses[numBackgroundProcesses] = childPID;
             strcpy(backgroundProcNames[numBackgroundProcesses], executable);
@@ -66,16 +67,16 @@ int processInput(char input[]) {
     int currentChar;
 
     //First up, check to see if background processes have completed and output their exit codes
-    for (int i = 0; i < numBackgroundProcesses; i++) {
+    for (int i = 0; i < MAX_BG_PROCESSES; i++) {
         int exitStatus = -1;
         waitpid(backgroundProcesses[i], &exitStatus, WNOHANG);
         //If our background process has exited, print its info
-        if (exitStatus >= 0) {
+        if (WIFEXITED(exitStatus)) {
             printf("[%d] %s Exit %d\n", backgroundProcesses[i], backgroundProcNames[i], exitStatus);
             numFinishedProcesses++;
         }
     }
-    numBackgroundProcesses -= numFinishedProcesses;
+    //numBackgroundProcesses -= numFinishedProcesses;
 
     //Parse the input for executable/command name and arguments
     int quoteSeen = 0;
@@ -84,7 +85,7 @@ int processInput(char input[]) {
     currentArg = (char*) malloc(MAX_ARG_LEN * sizeof(char));
     for(currentChar = 0; currentChar < strlen(input); currentChar++) {
         //Check for space and inside/outside of quotes
-        //This portion is space-delimited but only if outside of quotes
+        //This portion is space-delimited (and newline-delimited to finalize argv and move on) but only if outside of quotes
         if ((input[currentChar] == 32 || input[currentChar] == 10) && quoteSeen == 0) {
             //Append a null character to the end of the argument
             currentArg[currentArgIndex] = '\0';
@@ -109,10 +110,10 @@ int processInput(char input[]) {
             continue;
         }
         //If we see a " mark
-        if (input[currentChar] == 34 && !quoteSeen) {
+        if ((input[currentChar] == 34 || input[currentChar] == 39) && !quoteSeen) {
             quoteSeen = 1;
             continue;
-        } else if (input[currentChar] == 34 && quoteSeen) {
+        } else if ((input[currentChar] == 34 || input[currentChar] == 39) && quoteSeen) {
             quoteSeen = 0;
             continue;
         }
@@ -138,6 +139,13 @@ int processInput(char input[]) {
         workingDir = getwd(workingDir);
         printf("%s\n", workingDir);
         freeArgMemory(execArgsIndex);
+        return 0;
+    } else if (strcmp(execArgs[0], "jobs") == 0) {
+        printf("---------------Current Jobs---------------\n");
+        for (int i = 0; i < numBackgroundProcesses; i++) {
+            printf("Process %s | PID %d\n", backgroundProcNames[i], backgroundProcesses[i]);
+        }
+        printf("------------------------------------------\n");
         return 0;
     } else if (strcmp(execArgs[0], "cd") == 0) {
         //Second argument should be a directory
