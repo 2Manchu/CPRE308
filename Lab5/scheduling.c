@@ -14,8 +14,6 @@
 
 #define SCHEDULER_NAME_LEN 30
 
-int lastRunProc = -1;
-
 /* Defines a simulated process */
 typedef struct process {
   int arrivaltime;    /* Time process arrives and wishes to start */
@@ -204,6 +202,7 @@ int shortest_remaining_time(process proc[], int t) {
 }
 
 int round_robin(process proc[], int t) {
+    static int lastRunProc = -1;
     for (int procNum = 0; procNum < NUM_PROCESSES; procNum++) {
         //First step is to check and see if the process is even ready
         if (proc[procNum].arrivaltime <= t) {
@@ -238,6 +237,47 @@ int round_robin(process proc[], int t) {
 }
 
 int round_robin_priority(process proc[], int t) {
-  /* TODO: Implement scheduling algorithm here */
-  return -1;
+  static process p0[NUM_PROCESSES];
+  static process p1[NUM_PROCESSES];
+  static process p2[NUM_PROCESSES];
+
+  static int p0Idx = 0;
+  static int p1Idx = 0;
+  static int p2Idx = 0;
+  static int procs_grabbed = 0;
+
+  static int lastP0 = 0;
+  static int lastP1 = 0;
+  static int lastP2 = 0;
+
+  if (!procs_grabbed) {
+      for (int i = 0; i < NUM_PROCESSES; i++) {
+          if (proc[i].priority == 0) {
+              p0[p0Idx] = proc[i];
+              p0Idx++;
+          }
+          if (proc[i].priority == 1) {
+              p1[p1Idx] = proc[i];
+              p1Idx++;
+          }
+          if (proc[i].priority == 2) {
+              p2[p2Idx] = proc[i];
+              p2Idx++;
+          }
+      }
+      procs_grabbed = 1;
+  }
+
+  lastP2 = lastP2 % 3;
+  for (int i = 0; i <= p2Idx; i++) {
+      if (p2[i].arrivaltime <= t) {
+          if (!p2[i].finished) {
+              if (i > lastP2) {
+                  lastP2 = i;
+                  return lastP2;
+              }
+          }
+      }
+  }
+  //No P2's to run, so now look for P1's
 }
