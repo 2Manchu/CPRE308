@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 #define NUM_PROCESSES 20
 #define NUM_SCHEDULERS 4
@@ -77,6 +78,7 @@ int main() {
     proc[i].finished = 0;
   }
 
+setvbuf(stdout, NULL, _IONBF, 0);
   /* Print process values */
   printf("Process\tarrival\truntime\tpriority\n");
   for(i = 0; i < NUM_PROCESSES; i++) {
@@ -237,47 +239,71 @@ int round_robin(process proc[], int t) {
 }
 
 int round_robin_priority(process proc[], int t) {
-  static process p0[NUM_PROCESSES];
-  static process p1[NUM_PROCESSES];
-  static process p2[NUM_PROCESSES];
+    //Loop thru all processes
+    //First for P2's
+    //Second for P1's
+    //Third for P0's
+    static int lastRunProc = -1;
+    int lastRunProcCopy = lastRunProc;
 
-  static int p0Idx = 0;
-  static int p1Idx = 0;
-  static int p2Idx = 0;
-  static int procs_grabbed = 0;
+    //Double for loop to check the part of the list > procNum then the part < the original procNum
+    for (int i = 0; i < 2; i++) {
+        //P2's
+        for (int procNum = 0; procNum < NUM_PROCESSES; procNum++) {
+            //First step is to check and see if the process is even ready
+            if (proc[procNum].arrivaltime <= t) {
+                //It also can't be finished
+                if (!proc[procNum].finished && proc[procNum].priority == 2) {
+                    //We just want to run the next ready process for one quantum so return immediately
+                    if (procNum > lastRunProc) {
+                        lastRunProc = procNum;
+                        return procNum;
+                    }
+                }
+            }
+        }
+        lastRunProc = -1;
+    }
+    //Restore the point at which we started
+    lastRunProc = lastRunProcCopy;
 
-  static int lastP0 = 0;
-  static int lastP1 = 0;
-  static int lastP2 = 0;
+    for (int i = 0; i < 2; i++) {
+        //P1's
+        for (int procNum = 0; procNum < NUM_PROCESSES; procNum++) {
+            //First step is to check and see if the process is even ready
+            if (proc[procNum].arrivaltime <= t) {
+                //It also can't be finished
+                if (!proc[procNum].finished && proc[procNum].priority == 1) {
+                    //We just want to run the next ready process for one quantum so return immediately
+                    if (procNum > lastRunProc) {
+                        lastRunProc = procNum;
+                        return procNum;
+                    }
+                }
+            }
+        }
+        lastRunProc = -1;
+    }
+    //Restore starting point
+    lastRunProc = lastRunProcCopy;
 
-  if (!procs_grabbed) {
-      for (int i = 0; i < NUM_PROCESSES; i++) {
-          if (proc[i].priority == 0) {
-              p0[p0Idx] = proc[i];
-              p0Idx++;
-          }
-          if (proc[i].priority == 1) {
-              p1[p1Idx] = proc[i];
-              p1Idx++;
-          }
-          if (proc[i].priority == 2) {
-              p2[p2Idx] = proc[i];
-              p2Idx++;
-          }
-      }
-      procs_grabbed = 1;
-  }
+    for (int i = 0; i < 2; i++) {
+        //P1's
+        for (int procNum = 0; procNum < NUM_PROCESSES; procNum++) {
+            //First step is to check and see if the process is even ready
+            if (proc[procNum].arrivaltime <= t) {
+                //It also can't be finished
+                if (!proc[procNum].finished && proc[procNum].priority == 0) {
+                    //We just want to run the next ready process for one quantum so return immediately
+                    if (procNum > lastRunProc) {
+                        lastRunProc = procNum;
+                        return procNum;
+                    }
+                }
+            }
+        }
+        lastRunProc = -1;
+    }
 
-  lastP2 = lastP2 % 3;
-  for (int i = 0; i <= p2Idx; i++) {
-      if (p2[i].arrivaltime <= t) {
-          if (!p2[i].finished) {
-              if (i > lastP2) {
-                  lastP2 = i;
-                  return lastP2;
-              }
-          }
-      }
-  }
-  //No P2's to run, so now look for P1's
+    return -1;
 }
