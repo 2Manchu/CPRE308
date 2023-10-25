@@ -4,40 +4,42 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <fcntl.h>
-#include <sys/queue.h>
+#include <sys/time.h>
 #include <sys/stat.h>
 #include "Bank.h"
 
 #define MAX_REQ_LEN 250
 
-struct command_entry {
-    TAILQ_ENTRY(command_entry) tailq;
-    char* command;
-    int req_id;
+int quit_cmd_received = 0;
+sem_t* account_mutex_arr;
+sem_t* queue_mutex;
+
+struct queue* q;
+
+struct transaction {
+    int acc_id;
+    int amount;
 };
 
-int quit_cmd_received = 0;
-sem_t* mutex;
-TAILQ_HEAD(tailhead, command_entry) head;
+struct request {
+    //Pointer to next request
+    struct request* next;
+    int request_id;
+    int balchk_id;
+    //Array of transactions in this request
+    struct transaction* trans_list;
+    int trans_cnt;
+    struct timeval start;
+    struct timeval end;
+    //Is this an exit command?
+    int exit;
+};
 
-//Helper function to add to the queue of commands
-void queue_add(char* command) {
-    static int req_id = 1;
-    char* command_copy = NULL;
-    struct command_entry* q_elem;
-
-    //Allocate space for command
-    strcpy(command_copy, command);
-
-    //Create a data structure and enter it into the queue
-    q_elem = malloc(sizeof(struct command_entry));
-    if (q_elem) {
-        q_elem->req_id = req_id;
-        q_elem->command = command_copy;
-    }
-    TAILQ_INSERT_TAIL(&head, q_elem, tailq);
-    req_id++;
-}
+struct queue {
+    struct request* head;
+    struct request* tail;
+    int num_jobs;
+};
 
 //--------------Worker thread code--------------
 void* process_request() {
@@ -48,6 +50,84 @@ void* process_request() {
 
 
     }
+}
+
+void queue_add(struct request* req) {
+
+}
+
+void create_trans(char command[]) {
+    static int req_id = 1;
+    struct request* req;
+
+    //Create the request trans
+    req = malloc(sizeof(struct request));
+
+    //Get the type of command we are executing
+    char* trans_type;
+    trans_type = strtok(command, " ");
+    if (strcmp(trans_type, "CHECK") == 0) {
+        //All we need in a balance check trans is the account number
+        req->balchk_id = atoi(strtok(NULL, " "));
+        req->exit = 0;
+        queue_add(req);
+        printf("ID %d\n", req_id);
+    }
+    else if (strcmp(trans_type, "TRANS") == 0) {
+        char* command_copy = NULL;
+        strcpy(command_copy, command);
+        req->trans_cnt = 0;
+        //Start by grabbing the number of <account, amount> pairs from a copy of the command
+        while (1) {
+            if (strtok(command_copy, " ") != NULL) {
+                if (strtok(command_copy, " ") != NULL) {
+                    //Pair
+                    req->trans_cnt++;
+                }
+                else {
+                    //There's no amount associated with the account so this request is invalid
+                    free(req);
+                    return;
+                }
+            }
+            else {
+                //We're out of pairs to grab
+                break;
+            }
+        }
+        //Allocate an array of transactions
+        struct transaction* trans_array;
+        trans_array = (struct transaction*)malloc(req->trans_cnt * sizeof(struct transaction));
+        //Also set balchk_id to -1 to denote that this is a trans request
+        req->balchk_id = -1;
+        int curr_trans = 0;
+        while (curr_trans < req->trans_cnt) {
+            struct transaction* t;
+            t = malloc(sizeof(struct transaction));
+
+            int acc_id = atoi(strtok(command, " "));
+            int amount = atoi(strtok(NULL, " "));
+            t->acc_id = acc_id;
+            t->amount = amount;
+
+            trans_array[curr_trans] = *t;
+            curr_trans++;
+        }
+
+        req->exit = 0;
+    }
+    else if (strcmp(trans_type, "END") == 0) {
+        req->exit = 1;
+        queue_add(req);
+    }
+    else {
+        //This was not a valid transaction type
+        //TODO maybe write to the file idk
+        return;
+    }
+
+    req->request_id = req_id;
+    req_id++;
 }
 
 int main (int argc, char* argv[]) {
@@ -65,22 +145,34 @@ int main (int argc, char* argv[]) {
     }
 
     //--------------Initialize desired number of bank accounts--------------
-    printf("Initializing %d accounts", num_accounts);
+    printf("Initializing %d accounts...\n", num_accounts);
     initialize_accounts(num_accounts);
 
-    //--------------Get requests and start worker threads as necessary--------------
-    char* command = NULL;
+    //--------------Initialize semaphores--------------
+    //TODO FIXME ONE FOR EVERY ACCOUNT
+    for (int i = 0; i < num_accounts; i++) {
+
+    }
+    queue_mutex = sem_open("QUEUE_SEM", O_CREAT, 666, 1);
+
+    //--------------Start worker threads--------------
     pthread_t processing_threads[num_threads];
-    mutex = sem_open("SEM", O_CREAT, 666, 1);
-    printf("Creating %d worker threads...", num_threads);
+    printf("Creating %d worker threads...\n", num_threads);
     for (int i = 0; i < num_threads; i++) {
         pthread_create(&processing_threads[i], NULL, process_request, NULL);
     }
 
+    //--------------Create a queue struct to hold our requests--------------
+    q = malloc(sizeof(struct queue));
+    q->head = NULL;
+    q->tail = NULL;
+
+    //--------------Get input requests--------------
+    char command[MAX_REQ_LEN];
     while (!quit_cmd_received) {
         //Get input from stdin and add to queue
         fgets(command, MAX_REQ_LEN, stdin);
-        queue_add(command);
+        create_trans(command);
     }
     //Stop taking input once quit has been received
     printf("Waiting on threads to finish processing requests\n");
