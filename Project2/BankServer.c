@@ -77,7 +77,7 @@ void* process_request() {
         int insufficient = 0;
 
         if (quit_cmd_received) {
-            printf("THEAD: Exiting\n");
+//            printf("THEAD: Exiting\n");
             return 0;
         }
         //Start by acquiring a lock on the queue to grab a request
@@ -88,12 +88,15 @@ void* process_request() {
             req = queue_pop();
         } else {
             //Wait until we have a job available
-            printf("THREAD: Waiting for transaction\n");
-            while (q->num_jobs == 0);
+//            printf("THREAD: Waiting for transaction\n");
+            while (q->num_jobs == 0 && !quit_cmd_received);
+            if (quit_cmd_received && q->num_jobs == 0) {
+                return 0;
+            }
             req = queue_pop();
         }
         sem_post(queue_mutex);
-        printf("THREAD: Got request\n");
+//        printf("THREAD: Got request\n");
 
         //END command
         if (req->exit == 1) {
@@ -108,26 +111,26 @@ void* process_request() {
             sem_wait(&acc_mutex[req->balchk_id]);
             //Do the check
             int balance = read_account(req->balchk_id);
-            printf("THREAD: ID %0d BAL %0d\n", req->balchk_id, balance);
+//            printf("THREAD: ID %0d BAL %0d\n", req->balchk_id, balance);
             sem_post(&acc_mutex[req->balchk_id]);
 
             //Print the check to the file
             gettimeofday(&end, NULL);
             fprintf(output, "%0d BAL %0d TIME %06.ld %06.ld\n", req->request_id, balance, req->start.tv_usec, end.tv_usec);
         } else {
-            printf("THREAD: Performing TRANS\n");
+//            printf("THREAD: Performing TRANS\n");
             //First step is to acquire a lock on all accounts involved in the request
             for(int trans = 0; trans < req->trans_cnt; trans++) {
                 //TODO If there's the same account on there more than once this will break
                 sem_wait(&acc_mutex[req->trans_list[trans].acc_id]);
             }
-            printf("THREAD: Accounts locked\n");
+//            printf("THREAD: Accounts locked\n");
 
             //Start by checking for any accounts with insufficient balance to see if we need to void the whole request
             for (int trans = 0; trans < req->trans_cnt; trans++) {
+                int acct_balance = read_account(req->trans_list[trans].acc_id);
                 if (req->trans_list[trans].amount < 0) {
                     //Insufficient
-                    int acct_balance = read_account(req->trans_list[trans].acc_id);
                     if (acct_balance + req->trans_list[trans].amount < 0) {
                         fprintf(output, "%0d ISF %0d %06.ld %06.ld\n", req->request_id, req->trans_list[trans].acc_id, req->start.tv_usec, end.tv_usec);
                         fflush(output);
@@ -135,6 +138,9 @@ void* process_request() {
                         break;
                     }
                 }
+                //The transaction would be successful so
+                //add the account balance to the transaction amount so for the proceeding account write
+                req->trans_list[trans].amount += acct_balance;
             }
             if (insufficient) {
                 continue;
@@ -142,16 +148,16 @@ void* process_request() {
 
             //Proceed to perform each transaction, in order
             for (int trans = 0; trans < req->trans_cnt; trans++) {
-                printf("THREAD: Trans # %0d\n", trans);
+//                printf("THREAD: Trans # %0d\n", trans);
                 //Withdrawal
                 if (req->trans_list[trans].amount < 0) {
                 } else {
                     //Doing a deposit so no need to check balance before
                     write_account(req->trans_list[trans].acc_id, req->trans_list[trans].amount);
                     gettimeofday(&end, NULL);
-                    fprintf(output, "%0d OK %06.ld %06.ld\n", req->request_id, req->start.tv_usec, end.tv_usec);
                 }
             }
+            fprintf(output, "%0d OK %06.ld %06.ld\n", req->request_id, req->start.tv_usec, end.tv_usec);
             //Release all accounts
             for(int trans = 0; trans < req->trans_cnt; trans++) {
                 sem_post(&acc_mutex[req->trans_list[trans].acc_id]);
@@ -281,6 +287,7 @@ int main (int argc, char* argv[]) {
     for (int i = 0; i < num_accounts; i++) {
         sem_init(&acc_mutex[i], 0, 1);
     }
+    queue_mutex = (sem_t*)malloc(sizeof(sem_t));
     sem_init(queue_mutex, 0, 1);
     //--------------Start worker threads--------------
     pthread_t processing_threads[num_threads];
@@ -309,7 +316,7 @@ int main (int argc, char* argv[]) {
         }
     }
     //Stop taking input once quit has been received
-    printf("Waiting on threads to finish processing requests\n");
+    printf("Exiting: Waiting on threads to finish processing requests\n");
     for (int i = 0; i < num_threads; i++) {
         pthread_join(processing_threads[i], NULL);
     }
