@@ -48,6 +48,7 @@ void queue_add(struct request* req) {
     if (q->num_jobs == 0) {
         q->head = req;
         q->tail = req;
+        q->num_jobs++;
     } else {
         //Queue has jobs in it so we add to the tail
         req->next = q->tail;
@@ -72,22 +73,23 @@ void* process_request() {
     struct request* req;
     while(1) {
         if (quit_cmd_received) {
+            printf("THEAD: Exiting\n");
             return 0;
         }
         //Start by acquiring a lock on the queue to grab a request
-        printf("THREAD: Trying to acquire lock\n");
+//        printf("THREAD: Trying to acquire lock\n");
         sem_wait(queue_mutex);
-        printf("THREAD: Acquired lock\n");
+//        printf("THREAD: Acquired lock\n");
         if (q->num_jobs > 0) {
             req = queue_pop();
         } else {
             //Wait until we have a job available
             printf("THREAD: Waiting for transaction\n");
-            while (q->num_jobs <= 0);
-            continue;
+            while (q->num_jobs == 0);
+            req = queue_pop();
         }
         sem_post(queue_mutex);
-        printf("THREAD: Got transaction\n");
+        printf("THREAD: Got request\n");
 
         //Decide what type it is
         if (req->balchk_id >= 0) {
@@ -95,6 +97,7 @@ void* process_request() {
             sem_wait(&acc_mutex[req->balchk_id]);
             //Do the check
             int balance = read_account(req->balchk_id);
+            printf("THREAD: ID %0d BAL %0d\n", req->balchk_id, balance);
             sem_post(&acc_mutex[req->balchk_id]);
 
             //Print the check to the file
@@ -102,9 +105,10 @@ void* process_request() {
             struct timeval end;
             gettimeofday(&end, NULL);
             fprintf(output, "%0d BAL %0d TIME %.06d %.06d\n", req->request_id, balance, req->start.tv_usec, end.tv_usec);
+            fflush(output);
             funlockfile(output);
         } else {
-            //We have a TRANS
+            //TODO We have a TRANS
 
         }
 
@@ -135,7 +139,6 @@ void create_trans(char command[]) {
         //All we need in a balance check trans is the account number
         req->balchk_id = atoi(strtok(NULL, " "));
         req->exit = 0;
-        printf("ID %d\n", req_id);
     }
     else if (strcmp(trans_type, "TRANS") == 0) {
         req->trans_cnt = 0;
@@ -186,12 +189,13 @@ void create_trans(char command[]) {
 //            printf("DEBUG: TRANS[%0d] -> %0d %0d\n", i, req->trans_list[i].acc_id, req->trans_list[i].amount);
 //        }
     }
-    else if (strcmp(trans_type, "END") == 0) {
+    else if (strcmp(trans_type, "END\n") == 0) {
+        req->balchk_id = -1;
         req->exit = 1;
     }
     else {
         //This was not a valid transaction type
-        //TODO maybe write to the file idk
+        printf("ERROR: Invalid request type\n");
         return;
     }
 
@@ -221,6 +225,10 @@ int main (int argc, char* argv[]) {
 
     //--------------Open our output file for editing--------------
     output = fopen(output_filename, "w");
+    if (output == NULL) {
+        printf("ERROR: Could not open file\n");
+        return 254;
+    }
 
     //--------------Initialize desired number of bank accounts--------------
     printf("Initializing %d accounts...\n", num_accounts);
@@ -228,13 +236,9 @@ int main (int argc, char* argv[]) {
 
     //--------------Initialize semaphores--------------
     acc_mutex = (sem_t*)malloc(num_accounts * sizeof(sem_t));
-    char sem_name[15];
     for (int i = 0; i < num_accounts; i++) {
-//        sprintf(sem_name, "ACC_SEM[%0d]", i);
-//        acc_mutex[i] = *sem_open(sem_name, O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO, 1);
         sem_init(&acc_mutex[i], 0, 1);
     }
-//    queue_mutex = sem_open("QUEUE_SEM", O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO, 1);
     sem_init(queue_mutex, 0, 1);
     //--------------Start worker threads--------------
     pthread_t processing_threads[num_threads];
@@ -252,20 +256,24 @@ int main (int argc, char* argv[]) {
 
     //--------------Get input requests--------------
     char command[MAX_REQ_LEN];
-    while (!quit_cmd_received) {
+    while (1) {
         //Get input from stdin and add to queue
         fgets(command, MAX_REQ_LEN, stdin);
-        create_trans(command);
+        if (strcmp(command, "END\n") == 0) {
+            create_trans(command);
+            break;
+        } else {
+            create_trans(command);
+        }
     }
     //Stop taking input once quit has been received
     printf("Waiting on threads to finish processing requests\n");
     for (int i = 0; i < num_threads; i++) {
         pthread_join(processing_threads[i], NULL);
     }
-    for (int i = 0; i < num_accounts; i++) {
-        free(&acc_mutex[i]);
-        free(q);
-    }
+
+    free(&acc_mutex[0]);
+    free(q);
     free_accounts();
     fclose(output);
 
