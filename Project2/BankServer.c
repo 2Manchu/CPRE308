@@ -106,11 +106,11 @@ void* process_request() {
         //Decide what type it is
         if (req->balchk_id >= 0) {
             //Then grab the mutex for the account we want to check
-            sem_wait(&acc_mutex[req->balchk_id]);
+            sem_wait(&acc_mutex[req->balchk_id - 1]);
             //Do the check
-            int balance = read_account(req->balchk_id);
+            int balance = read_account(req->balchk_id - 1);
 //            printf("THREAD: ID %0d BAL %0d\n", req->balchk_id, balance);
-            sem_post(&acc_mutex[req->balchk_id]);
+            sem_post(&acc_mutex[req->balchk_id - 1]);
 
             //Print the check to the file
             gettimeofday(&end, NULL);
@@ -120,7 +120,7 @@ void* process_request() {
             //First step is to acquire a lock on all accounts involved in the request
             for(int trans = 0; trans < req->trans_cnt; trans++) {
                 //TODO If there's the same account on there more than once this will break
-                sem_wait(&acc_mutex[req->trans_list[trans].acc_id]);
+                sem_wait(&acc_mutex[req->trans_list[trans].acc_id - 1]);
             }
 //            printf("THREAD: Accounts locked\n");
 
@@ -158,7 +158,7 @@ void* process_request() {
             fprintf(output, "%0d OK %06.ld %06.ld\n", req->request_id, req->start.tv_usec, end.tv_usec);
             //Release all accounts
             for(int trans = 0; trans < req->trans_cnt; trans++) {
-                sem_post(&acc_mutex[req->trans_list[trans].acc_id]);
+                sem_post(&acc_mutex[req->trans_list[trans].acc_id - 1]);
             }
         }
 
