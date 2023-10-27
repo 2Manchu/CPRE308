@@ -1,5 +1,5 @@
 BankServer: 	BankServer.o Bank.o
-							gcc -o BankServer BankServer.o Bank.o -lpthread
+							gcc -o BankServer BankServer.o Bank.o -lpthread -lrt
 	
 BankServer.o: BankServer.c Bank.h
 							gcc -c BankServer.c

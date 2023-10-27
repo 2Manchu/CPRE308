@@ -76,10 +76,6 @@ void* process_request() {
     while(1) {
         int insufficient = 0;
 
-        if (quit_cmd_received) {
-//            printf("THEAD: Exiting\n");
-            return 0;
-        }
         //Start by acquiring a lock on the queue to grab a request
 //        printf("THREAD: Trying to acquire lock\n");
         sem_wait(queue_mutex);
@@ -91,6 +87,8 @@ void* process_request() {
 //            printf("THREAD: Waiting for transaction\n");
             while (q->num_jobs == 0 && !quit_cmd_received);
             if (quit_cmd_received && q->num_jobs == 0) {
+//                printf("THREAD: Returning!\n");
+                sem_post(queue_mutex);
                 return 0;
             }
             req = queue_pop();
@@ -282,6 +280,12 @@ int main (int argc, char* argv[]) {
     printf("Initializing %d accounts...\n", num_accounts);
     initialize_accounts(num_accounts);
 
+    //--------------Create a queue struct to hold our requests--------------
+    q = malloc(sizeof(struct queue));
+    q->head = NULL;
+    q->tail = NULL;
+    q->num_jobs = 0;
+
     //--------------Initialize semaphores--------------
     acc_mutex = (sem_t*)malloc(num_accounts * sizeof(sem_t));
     for (int i = 0; i < num_accounts; i++) {
@@ -289,6 +293,7 @@ int main (int argc, char* argv[]) {
     }
     queue_mutex = (sem_t*)malloc(sizeof(sem_t));
     sem_init(queue_mutex, 0, 1);
+
     //--------------Start worker threads--------------
     pthread_t processing_threads[num_threads];
     printf("Creating %d worker threads...\n", num_threads);
@@ -296,12 +301,7 @@ int main (int argc, char* argv[]) {
         //Pass the starting memory addresses of the semaphore array
         pthread_create(&processing_threads[i], NULL, process_request, NULL);
     }
-
-    //--------------Create a queue struct to hold our requests--------------
-    q = malloc(sizeof(struct queue));
-    q->head = NULL;
-    q->tail = NULL;
-    q->num_jobs = 0;
+    printf("Done setup.\n");
 
     //--------------Get input requests--------------
     char command[MAX_REQ_LEN];
@@ -316,14 +316,17 @@ int main (int argc, char* argv[]) {
         }
     }
     //Stop taking input once quit has been received
-    printf("Exiting: Waiting on threads to finish processing requests\n");
+    printf("Exiting: Waiting on threads to finish processing requests...\n");
     for (int i = 0; i < num_threads; i++) {
         pthread_join(processing_threads[i], NULL);
     }
 
     free(&acc_mutex[0]);
+//    printf("Acc\n");
     free(q);
+//    printf("q\n");
     free_accounts();
+//    printf("accounts\n");
     fclose(output);
 
 }
