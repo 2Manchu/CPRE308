@@ -1,11 +1,11 @@
-BankServer: 	BankServer.o Bank.o
-							gcc -o BankServer BankServer.o Bank.o -lpthread -lrt
+appserver: 	BankServer.o Bank.o
+		gcc -o appserver BankServer.o Bank.o -lpthread -lrt
 	
-BankServer.o: BankServer.c Bank.h
-							gcc -c BankServer.c
+BankServer.o: 	BankServer.c Bank.h
+		gcc -c BankServer.c
 							
-Bank.o: 			Bank.c Bank.h
-							gcc -c Bank.c
+Bank.o: 	Bank.c Bank.h
+		gcc -c Bank.c
 							
 .PHONY: all BankServer clean
 
