@@ -68,6 +68,32 @@ struct request* queue_pop() {
         return pop;
     }
 }
+
+void swap(struct transaction* left, struct transaction* right) {
+    struct transaction temp = *left;
+    *left = *right;
+    *right = temp;
+}
+
+void sort_transactions(struct transaction* trans_arr, int n) {
+    int i, j;
+    int swapped;
+    for (i = 0; i < n - 1; i++) {
+        swapped = 0;
+        for (j = 0; j < n - i - 1; j++) {
+            if (trans_arr[j].acc_id > trans_arr[j + 1].acc_id) {
+                swap(&trans_arr[j], &trans_arr[j + 1]);
+                swapped = 1;
+            }
+        }
+
+        // If no two elements were swapped by inner loop,
+        // then break
+        if (swapped == 0)
+            break;
+    }
+}
+
 //--------------Worker thread code--------------
 void* process_request() {
     struct request* req;
@@ -229,8 +255,12 @@ void create_trans(char command[]) {
             curr_trans++;
         }
 
-        req->exit = 0;
+        //TODO: Sort the transaction list in ascending order of account ID before we add it
+        //This will fix the deadlock issue
+        sort_transactions(trans_array, req->trans_cnt);
         req->trans_list = trans_array;
+
+        req->exit = 0;
 //        for(int i = 0; i < req->trans_cnt; i++) {
 //            printf("DEBUG: TRANS[%0d] -> %0d %0d\n", i, req->trans_list[i].acc_id, req->trans_list[i].amount);
 //        }
@@ -322,11 +352,8 @@ int main (int argc, char* argv[]) {
     }
 
     free(&acc_mutex[0]);
-//    printf("Acc\n");
     free(q);
-//    printf("q\n");
     free_accounts();
-//    printf("accounts\n");
     fclose(output);
 
 }
