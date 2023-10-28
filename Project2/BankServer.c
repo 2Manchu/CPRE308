@@ -134,18 +134,18 @@ void* process_request() {
             //Then grab the mutex for the account we want to check
             sem_wait(&acc_mutex[req->balchk_id - 1]);
             //Do the check
-            int balance = read_account(req->balchk_id - 1);
+            int balance = read_account(req->balchk_id);
 //            printf("THREAD: ID %0d BAL %0d\n", req->balchk_id, balance);
             sem_post(&acc_mutex[req->balchk_id - 1]);
 
             //Print the check to the file
             gettimeofday(&end, NULL);
-            fprintf(output, "%0d BAL %0d TIME %06.ld %06.ld\n", req->request_id, balance, req->start.tv_usec, end.tv_usec);
+            fprintf(output, "%0d BAL %0d TIME %ld.%06ld %ld.%06ld\n", req->request_id, balance, req->start.tv_sec, req->start.tv_usec, end.tv_sec, end.tv_usec);
         } else {
 //            printf("THREAD: Performing TRANS\n");
             //First step is to acquire a lock on all accounts involved in the request
             for(int trans = 0; trans < req->trans_cnt; trans++) {
-                //TODO If there's the same account on there more than once this will break
+//                printf("REQ %0d - Waiting on mutex for acct %0d\n", req->request_id, req->trans_list[trans].acc_id);
                 sem_wait(&acc_mutex[req->trans_list[trans].acc_id - 1]);
             }
 //            printf("THREAD: Accounts locked\n");
@@ -156,7 +156,8 @@ void* process_request() {
                 if (req->trans_list[trans].amount < 0) {
                     //Insufficient
                     if (acct_balance + req->trans_list[trans].amount < 0) {
-                        fprintf(output, "%0d ISF %0d %06.ld %06.ld\n", req->request_id, req->trans_list[trans].acc_id, req->start.tv_usec, end.tv_usec);
+                        gettimeofday(&end, NULL);
+                        fprintf(output, "%0d ISF %0d TIME %ld.%06ld %ld.%06ld\n", req->request_id, req->trans_list[trans].acc_id, req->start.tv_sec, req->start.tv_usec, end.tv_sec, end.tv_usec);
                         fflush(output);
                         insufficient = 1;
                         break;
@@ -167,25 +168,29 @@ void* process_request() {
                 req->trans_list[trans].amount += acct_balance;
             }
             if (insufficient) {
+                //Release all accounts
+                for(int trans = 0; trans < req->trans_cnt; trans++) {
+                    sem_post(&acc_mutex[req->trans_list[trans].acc_id - 1]);
+//                    printf("REQ %0d - Released mutex for acct %0d\n", req->request_id, req->trans_list[trans].acc_id);
+                }
+                free(req);
+                fflush(output);
                 continue;
             }
 
             //Proceed to perform each transaction, in order
             for (int trans = 0; trans < req->trans_cnt; trans++) {
-//                printf("THREAD: Trans # %0d\n", trans);
-                //Withdrawal
-                if (req->trans_list[trans].amount < 0) {
-                } else {
-                    //Doing a deposit so no need to check balance before
-                    write_account(req->trans_list[trans].acc_id, req->trans_list[trans].amount);
-                    gettimeofday(&end, NULL);
-                }
+                write_account(req->trans_list[trans].acc_id, req->trans_list[trans].amount);
             }
-            fprintf(output, "%0d OK %06.ld %06.ld\n", req->request_id, req->start.tv_usec, end.tv_usec);
-            //Release all accounts
-            for(int trans = 0; trans < req->trans_cnt; trans++) {
-                sem_post(&acc_mutex[req->trans_list[trans].acc_id - 1]);
-            }
+            //End of transaction action
+            gettimeofday(&end, NULL);
+            fprintf(output, "%0d OK TIME %ld.%06ld %ld.%06ld\n", req->request_id, req->start.tv_sec, req->start.tv_usec, end.tv_sec, end.tv_usec);
+        }
+
+        //Release all accounts
+        for(int trans = 0; trans < req->trans_cnt; trans++) {
+            sem_post(&acc_mutex[req->trans_list[trans].acc_id - 1]);
+//            printf("REQ %0d - Released mutex for acct %0d\n", req->request_id, req->trans_list[trans].acc_id);
         }
 
         free(req);
@@ -203,6 +208,7 @@ void create_trans(char command[]) {
     //Create the request trans
     req = malloc(sizeof(struct request));
     req->request_id = req_id;
+    printf("ID %0d\n", req->request_id);
 
     //Get the type of command we are executing
     char* trans_type;
@@ -281,7 +287,7 @@ void create_trans(char command[]) {
     req->start = *start;
 
     queue_add(req);
-    printf("ID %0d\n", req->request_id);
+
     req_id++;
 }
 
