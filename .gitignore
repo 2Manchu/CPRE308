@@ -56,3 +56,4 @@ dkms.conf
 Project2/output
 Project2/BankServer
 Project2*/test*.txt
+Project*/appserver*

@@ -1,3 +1,5 @@
+all: appserver appserver-coarse
+
 appserver: 	BankServer.o Bank.o
 		gcc -o appserver BankServer.o Bank.o -lpthread -lrt
 		
@@ -13,5 +15,6 @@ appserver.o: 	BankServer.c Bank.h
 Bank.o: 	Bank.c Bank.h
 		gcc -c Bank.c
 							
-.PHONY: all BankServer clean
+.PHONY: all appserver clean
+				all appserver-coarse clean
 
