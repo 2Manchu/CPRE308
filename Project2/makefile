@@ -1,7 +1,13 @@
 appserver: 	BankServer.o Bank.o
 		gcc -o appserver BankServer.o Bank.o -lpthread -lrt
+		
+appserver-coarse: BankServer-Coarse.o Bank.o
+		gcc -o appserver-coarse BankServer-Coarse.o Bank.o -lpthread -lrt
 	
-BankServer.o: 	BankServer.c Bank.h
+appserver-coarse.o: BankServer-Coarse.c Bank.h
+		gcc -c BankServer-Coarse.c
+
+appserver.o: 	BankServer.c Bank.h
 		gcc -c BankServer.c
 							
 Bank.o: 	Bank.c Bank.h
