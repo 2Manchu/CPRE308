@@ -251,11 +251,16 @@ int main ()
  * current_access = is the current time, so PageAccesses[current_access] = is the id of the page we want to put in the table right now
  * Return: index of the PageFrame in the table that is going to be replaced to fix the page fault
  */
-int PRAlgo_FIFO(const PageFrame * PageFrames, int num_frames, const int * PageAccesses, int num_accesses, int current_access)
-{
+int PRAlgo_FIFO(const PageFrame * PageFrames, int num_frames, const int * PageAccesses, int num_accesses, int current_access) {
 	int frame_to_evict = 0;
-	/*TODO: fill in the code below */
-
+    int smallest_entry_time = INT32_MAX;
+	//We just need to go through the page frames array and evict the one with the lowest startTime
+    for (int i = 0; i < num_frames; i++) {
+        if (PageFrames[i].time_of_arrival < smallest_entry_time) {
+            smallest_entry_time = PageFrames[i].time_of_arrival;
+            frame_to_evict = i;
+        }
+    }
 
 	return frame_to_evict;
 }
@@ -269,14 +274,18 @@ int PRAlgo_FIFO(const PageFrame * PageFrames, int num_frames, const int * PageAc
  * current_access = is the current time, so PageAccesses[current_access] = is the id of the page we want to put in the table right now
  * Return: index of the PageFrame in the table that is going to be replaced to fix the page fault
  */
-int PRAlgo_LRU(const PageFrame * PageFrames, int num_frames, const int * PageAccesses, int num_accesses, int current_access)
-{
+int PRAlgo_LRU(const PageFrame * PageFrames, int num_frames, const int * PageAccesses, int num_accesses, int current_access) {
 	int frame_to_evict = 0;
-	/*TODO: fill in the code below */
-
+    int lowest_used_time = INT32_MAX;
+    //We just need to go through the page frames array and evict the one with the lowest accessTime
+    for (int i = 0; i < num_frames; i++) {
+        if (PageFrames[i].time_of_access < lowest_used_time) {
+            lowest_used_time = PageFrames[i].time_of_arrival;
+            frame_to_evict = i;
+        }
+    }
 
 	return frame_to_evict;
-
 }
 
 
@@ -292,9 +301,24 @@ int PRAlgo_LRU(const PageFrame * PageFrames, int num_frames, const int * PageAcc
 int PRAlgo_OPT(const PageFrame * PageFrames, int num_frames, const int * PageAccesses, int num_accesses, int current_access)
 {
 	int frame_to_evict = 0;
-	/*TODO: fill in the code below */
-
+    int next_access_times[num_frames];
+    //For each current entry in the page table, go through every page access and find the next use of a page with the same ID
+    for (int current_frame = 0; current_frame < num_frames; current_frame++) {
+        for (int future_access = current_access; future_access < num_accesses; future_access++) {
+            if (PageAccesses[future_access] == PageFrames[current_frame].page_id) {
+                next_access_times[current_frame] = future_access;
+                break;
+            }
+        }
+    }
+    //At the end, compare the values of next_access_times and evict the one with the largest value
+    int largest_access_time = -1;
+    for (int i = 0; i < num_frames; i++) {
+        if (next_access_times[i] > largest_access_time) {
+            largest_access_time = next_access_times[i];
+            frame_to_evict = i;
+        }
+    }
 
 	return frame_to_evict;
-
 }
