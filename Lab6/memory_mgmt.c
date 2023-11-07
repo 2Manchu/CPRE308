@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 
 #define NUM_FRAMES      16      /* Number of Page Frames */
 #define NUM_PAGES       128     /* Number of memory pages. 
@@ -253,7 +254,7 @@ int main ()
  */
 int PRAlgo_FIFO(const PageFrame * PageFrames, int num_frames, const int * PageAccesses, int num_accesses, int current_access) {
 	int frame_to_evict = 0;
-    int smallest_entry_time = INT32_MAX;
+    int smallest_entry_time = INT_MAX;
 	//We just need to go through the page frames array and evict the one with the lowest startTime
     for (int i = 0; i < num_frames; i++) {
         if (PageFrames[i].time_of_arrival < smallest_entry_time) {
@@ -276,7 +277,7 @@ int PRAlgo_FIFO(const PageFrame * PageFrames, int num_frames, const int * PageAc
  */
 int PRAlgo_LRU(const PageFrame * PageFrames, int num_frames, const int * PageAccesses, int num_accesses, int current_access) {
 	int frame_to_evict = 0;
-    int lowest_used_time = INT32_MAX;
+    int lowest_used_time = INT_MAX;
     //We just need to go through the page frames array and evict the one with the lowest accessTime
     for (int i = 0; i < num_frames; i++) {
         if (PageFrames[i].time_of_access < lowest_used_time) {
