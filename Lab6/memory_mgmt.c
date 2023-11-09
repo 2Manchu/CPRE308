@@ -302,22 +302,20 @@ int PRAlgo_LRU(const PageFrame * PageFrames, int num_frames, const int * PageAcc
 int PRAlgo_OPT(const PageFrame * PageFrames, int num_frames, const int * PageAccesses, int num_accesses, int current_access)
 {
 	int frame_to_evict = 0;
-    int next_access_times[num_frames];
+    int farthest_access = 0;
     //For each current entry in the page table, go through every page access and find the next use of a page with the same ID
     for (int current_frame = 0; current_frame < num_frames; current_frame++) {
-        for (int future_access = current_access; future_access < num_accesses; future_access++) {
-            if (PageAccesses[future_access] == PageFrames[current_frame].page_id) {
-                next_access_times[current_frame] = future_access;
-                break;
-            }
+        //Look for the next frame with this ID to evict
+        int next_access_time = current_access;
+        //Go until we have either exhausted the list or have found a page with a matching ID
+        while (next_access_time < num_accesses && PageFrames[current_frame].page_id != PageAccesses[next_access_time]) {
+            next_access_time++;
         }
-    }
-    //At the end, compare the values of next_access_times and evict the one with the largest value
-    int largest_access_time = -1;
-    for (int i = 0; i < num_frames; i++) {
-        if (next_access_times[i] > largest_access_time) {
-            largest_access_time = next_access_times[i];
-            frame_to_evict = i;
+
+        //If our current found page is used farther out than the previous farthest
+        if (next_access_time - current_access > farthest_access) {
+            farthest_access = next_access_time - current_access;
+            frame_to_evict = current_frame;
         }
     }
 
