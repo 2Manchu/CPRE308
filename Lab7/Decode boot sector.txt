@@ -1,0 +1,4 @@
+Bytes per logical sector: 0x0002 -> represents 0x2000 = 8192
+Logical sectors per cluster (block): 0d16 
+Max number of root directory entries: 0xE000 -> represents 0x000E= 14
+Logical sectors per FAT: 0x1000 -> represents 0x0001 = 1
