@@ -78,8 +78,7 @@ char * parseTime(char string[], unsigned short usTime);
 //       the 16 bits used to store the date
 // Post: string contains the formatted date
 char * parseDate(char string[], unsigned short usDate);
-
-
+void printBootSector(struct BootSector * pBootS);
 
 
 // reads the boot sector and root directory
@@ -103,6 +102,7 @@ int main(int argc, char * argv[])
     
     // Decode the boot Sector
     decodeBootSector(&sector, buffer);
+    //printBootSector(&sector);
     
     // Calculate the location of the root directory
     iRDOffset = (1 + (sector.iSectorsFAT * sector.iNumberFATs) )
@@ -163,7 +163,7 @@ void decodeBootSector(struct BootSector * pBootS, unsigned char buffer[])
 // attributes and size of each directory entry to the console
 void parseDirectory(int iDirOff, int iEntries, unsigned char buffer[])
 {
-    int i = 0;
+    int i;
     char string[13];
     
     // Display table header with labels
@@ -185,19 +185,21 @@ void parseDirectory(int iDirOff, int iEntries, unsigned char buffer[])
 		printf("%-12s\t", string);
 		
 		//Display Attributes
-		parseAttributes(string, (i * 0x20) + 0xB);
+		parseAttributes(string, buffer[(i * 0x20) + 0xB]);
 		printf("%s\t", string);
 		
 		//Display Time
-		parseTime(string, (i * 0x20) + 0x16);
+		parseTime(string, endianSwap(buffer[(i * 0x20) + 0x16], buffer[(i * 0x20) + 0x17]));
 		printf("%s\t", string);
 		
 		//Display Date
-		parseDate(string, (i * 0x20) + 0x18);
+		parseDate(string, endianSwap(buffer[(i * 0x20) + 0x18], buffer[(i * 0x20) + 0x19]));
 		printf("%s\t", string);
 		
 		//Display Size
-		printf("%d\n", (i * 0x20) + 0x1C);
+        int size;
+        size = endianSwap(buffer[(i * 0x20) + 0x1E], buffer[(i * 0x20) + 0x1F]) | endianSwap(buffer[(i * 0x20) + 0x1C], buffer[(i * 0x20) + 0x1D]);
+		printf("%d\n", size);
     }
     
     // Display key
@@ -269,3 +271,33 @@ char * toDOSName(char *string, unsigned char buffer[], int offset)
     return string;
 } // end toDosNameRead-Only Bit
 
+void printBootSector(struct BootSector * pBootS)
+{
+#ifndef PRINT_HEX
+    printf("                    Name:   %s\n", pBootS->sName);
+    printf("            Bytes/Sector:   %i\n", pBootS->iBytesSector);
+    printf("         Sectors/Cluster:   %i\n", pBootS->iSectorsCluster);
+    printf("        Reserved Sectors:   %i\n", pBootS->iReservedSectors);
+    printf("          Number of FATs:   %i\n", pBootS->iNumberFATs);
+    printf("  Root Directory entries:   %i\n", pBootS->iRootEntries);
+    printf("         Logical sectors:   %i\n", pBootS->iLogicalSectors);
+    printf("       Medium descriptor:   0x%04x\n", pBootS->xMediumDescriptor);
+    printf("             Sectors/FAT:   %i\n", pBootS->iSectorsFAT);
+    printf("           Sectors/Track:   %i\n", pBootS->iSectorsTrack);
+    printf("         Number of heads:   %i\n", pBootS->iHeads);
+    printf("Number of Hidden Sectors:   %i\n", pBootS->iHiddenSectors);
+#else
+    printf("                    Name:   %s\n",     pBootS->sName);
+	printf("            Bytes/Sector:   0x%04x\n", pBootS->iBytesSector);
+	printf("         Sectors/Cluster:   0x%02x\n", pBootS->iSectorsCluster);
+	printf("        Reserved Sectors:   0x%04x\n", pBootS->iReservedSectors);
+	printf("          Number of FATs:   0x%02x\n", pBootS->iNumberFATs);
+	printf("  Root Directory entries:   0x%04x\n", pBootS->iRootEntries);
+	printf("         Logical sectors:   0x%04x\n", pBootS->iLogicalSectors);
+	printf("       Medium descriptor:   0x%02x\n", pBootS->xMediumDescriptor);
+	printf("             Sectors/FAT:   0x%04x\n", pBootS->iSectorsFAT);
+	printf("           Sectors/Track:   0x%04x\n", pBootS->iSectorsTrack);
+	printf("         Number of heads:   0x%04x\n", pBootS->iHeads);
+	printf("Number of Hidden Sectors:   0x%04x\n", pBootS->iHiddenSectors);
+#endif
+}
